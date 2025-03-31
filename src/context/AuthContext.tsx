@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User } from "@/types";
+import { toast } from "sonner";
 
 interface AuthContextType {
   user: User | null;
@@ -20,18 +21,36 @@ export const useAuth = () => {
   return context;
 };
 
+// API base URL - change this to your Python backend URL
+const API_URL = "http://localhost:8000";
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
+    // Check for existing token
     const checkAuth = async () => {
       try {
-        // In a real app, we would check with Supabase here
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+        const token = localStorage.getItem('token');
+        if (token) {
+          const response = await fetch(`${API_URL}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            const user: User = {
+              ...userData,
+              createdAt: new Date(userData.createdAt)
+            };
+            setUser(user);
+          } else {
+            // Token invalid, remove it
+            localStorage.removeItem('token');
+          }
         }
       } catch (error) {
         console.error("Auth check failed:", error);
@@ -46,17 +65,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Mock login for now - would use Supabase in real app
-      const mockUser: User = {
-        id: '123',
-        email,
-        name: email.split('@')[0],
-        createdAt: new Date(),
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Login failed');
+      }
+      
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      
+      // Now get user data
+      const userResponse = await fetch(`${API_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${data.access_token}`
+        }
+      });
+      
+      if (!userResponse.ok) {
+        throw new Error('Failed to get user data');
+      }
+      
+      const userData = await userResponse.json();
+      const user: User = {
+        ...userData,
+        createdAt: new Date(userData.createdAt)
       };
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      
+      setUser(user);
+      toast.success("Successfully logged in");
     } catch (error) {
       console.error("Login failed:", error);
+      toast.error("Login failed: " + (error instanceof Error ? error.message : "Unknown error"));
       throw error;
     } finally {
       setIsLoading(false);
@@ -66,17 +112,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
-      // Mock registration for now - would use Supabase in real app
-      const mockUser: User = {
-        id: '123',
-        email,
-        name,
-        createdAt: new Date(),
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password, name })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Registration failed');
+      }
+      
+      const userData = await response.json();
+      const user: User = {
+        ...userData,
+        createdAt: new Date(userData.createdAt)
       };
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      
+      // Store token if available
+      if (userData.access_token) {
+        localStorage.setItem('token', userData.access_token);
+      }
+      
+      setUser(user);
+      toast.success("Account created successfully");
     } catch (error) {
       console.error("Registration failed:", error);
+      toast.error("Registration failed: " + (error instanceof Error ? error.message : "Unknown error"));
       throw error;
     } finally {
       setIsLoading(false);
@@ -84,9 +148,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    // Mock logout
-    localStorage.removeItem('user');
+    localStorage.removeItem('token');
     setUser(null);
+    toast.info("You have been logged out");
   };
 
   return (

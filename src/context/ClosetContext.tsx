@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { ClothingItem, Outfit } from "@/types";
 import { useAuth } from "./AuthContext";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 interface ClosetContextType {
   items: ClothingItem[];
@@ -28,12 +28,23 @@ export const useCloset = () => {
   return context;
 };
 
+// API base URL - change this to your Python backend URL
+const API_URL = "http://localhost:8000";
+
 export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
-  const { toast } = useToast();
+
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  };
 
   // Load data when user changes
   useEffect(() => {
@@ -45,123 +56,208 @@ export const ClosetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
+      setIsLoading(true);
       try {
-        // In a real app, we would fetch from Supabase here
-        const storedItems = localStorage.getItem(`items-${user.id}`);
-        const storedOutfits = localStorage.getItem(`outfits-${user.id}`);
+        // Fetch items
+        const itemsResponse = await fetch(`${API_URL}/items`, {
+          headers: getAuthHeaders()
+        });
         
-        if (storedItems) {
-          setItems(JSON.parse(storedItems));
-        } else {
-          // Mock data for demo purposes
-          setItems(getMockClothingItems());
+        if (!itemsResponse.ok) {
+          throw new Error('Failed to fetch items');
         }
         
-        if (storedOutfits) {
-          setOutfits(JSON.parse(storedOutfits));
-        } else {
-          // Load mock outfits
-          setOutfits(getMockOutfits());
+        const itemsData = await itemsResponse.json();
+        const parsedItems = itemsData.map((item: any) => ({
+          ...item,
+          createdAt: new Date(item.createdAt),
+          lastWorn: item.lastWorn ? new Date(item.lastWorn) : undefined
+        }));
+        setItems(parsedItems);
+        
+        // Fetch outfits
+        const outfitsResponse = await fetch(`${API_URL}/outfits`, {
+          headers: getAuthHeaders()
+        });
+        
+        if (!outfitsResponse.ok) {
+          throw new Error('Failed to fetch outfits');
         }
+        
+        const outfitsData = await outfitsResponse.json();
+        const parsedOutfits = outfitsData.map((outfit: any) => ({
+          ...outfit,
+          createdAt: new Date(outfit.createdAt),
+          lastWorn: outfit.lastWorn ? new Date(outfit.lastWorn) : undefined
+        }));
+        setOutfits(parsedOutfits);
       } catch (error) {
         console.error("Failed to load closet data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load your wardrobe data",
-          variant: "destructive",
-        });
+        toast.error("Failed to load your wardrobe data");
+        
+        // Use mock data if API fails (for development)
+        setItems(getMockClothingItems());
+        setOutfits(getMockOutfits());
       } finally {
         setIsLoading(false);
       }
     };
 
     loadData();
-  }, [user, toast]);
+  }, [user]);
 
-  // Save data whenever it changes
-  useEffect(() => {
-    if (user && items.length > 0) {
-      localStorage.setItem(`items-${user.id}`, JSON.stringify(items));
+  const addItem = async (newItem: Omit<ClothingItem, "id" | "createdAt">) => {
+    try {
+      const response = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newItem)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to add item');
+      }
+      
+      const addedItem = await response.json();
+      const parsedItem: ClothingItem = {
+        ...addedItem,
+        createdAt: new Date(addedItem.createdAt),
+        lastWorn: addedItem.lastWorn ? new Date(addedItem.lastWorn) : undefined
+      };
+      
+      setItems((prev) => [...prev, parsedItem]);
+      toast.success("Item added to your wardrobe");
+    } catch (error) {
+      console.error("Failed to add item:", error);
+      toast.error("Failed to add item to your wardrobe");
     }
-  }, [items, user]);
+  };
 
-  useEffect(() => {
-    if (user && outfits.length > 0) {
-      localStorage.setItem(`outfits-${user.id}`, JSON.stringify(outfits));
+  const updateItem = async (id: string, updates: Partial<ClothingItem>) => {
+    try {
+      const response = await fetch(`${API_URL}/items/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updates)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update item');
+      }
+      
+      const updatedItem = await response.json();
+      const parsedItem: ClothingItem = {
+        ...updatedItem,
+        createdAt: new Date(updatedItem.createdAt),
+        lastWorn: updatedItem.lastWorn ? new Date(updatedItem.lastWorn) : undefined
+      };
+      
+      setItems((prev) => 
+        prev.map((item) => 
+          item.id === id ? parsedItem : item
+        )
+      );
+      toast.success("Item updated successfully");
+    } catch (error) {
+      console.error("Failed to update item:", error);
+      toast.error("Failed to update item");
     }
-  }, [outfits, user]);
-
-  const addItem = (newItem: Omit<ClothingItem, "id" | "createdAt">) => {
-    const item: ClothingItem = {
-      ...newItem,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-    };
-    setItems((prev) => [...prev, item]);
-    toast({
-      title: "Item Added",
-      description: "Successfully added to your wardrobe",
-    });
   };
 
-  const updateItem = (id: string, updates: Partial<ClothingItem>) => {
-    setItems((prev) => 
-      prev.map((item) => 
-        item.id === id ? { ...item, ...updates } : item
-      )
-    );
-    toast({
-      title: "Item Updated",
-      description: "Successfully updated your item",
-    });
+  const removeItem = async (id: string) => {
+    try {
+      const response = await fetch(`${API_URL}/items/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete item');
+      }
+      
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      toast.success("Item removed from your wardrobe");
+    } catch (error) {
+      console.error("Failed to remove item:", error);
+      toast.error("Failed to remove item");
+    }
   };
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-    // Also remove item from any outfits
-    setOutfits((prev) =>
-      prev.map((outfit) => ({
-        ...outfit,
-        items: outfit.items.filter((itemId) => itemId !== id),
-      }))
-    );
-    toast({
-      title: "Item Removed",
-      description: "Successfully removed from your wardrobe",
-    });
+  const addOutfit = async (newOutfit: Omit<Outfit, "id" | "createdAt">) => {
+    try {
+      const response = await fetch(`${API_URL}/outfits`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newOutfit)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to add outfit');
+      }
+      
+      const addedOutfit = await response.json();
+      const parsedOutfit: Outfit = {
+        ...addedOutfit,
+        createdAt: new Date(addedOutfit.createdAt),
+        lastWorn: addedOutfit.lastWorn ? new Date(addedOutfit.lastWorn) : undefined
+      };
+      
+      setOutfits((prev) => [...prev, parsedOutfit]);
+      toast.success("Outfit created successfully");
+    } catch (error) {
+      console.error("Failed to add outfit:", error);
+      toast.error("Failed to create outfit");
+    }
   };
 
-  const addOutfit = (newOutfit: Omit<Outfit, "id" | "createdAt">) => {
-    const outfit: Outfit = {
-      ...newOutfit,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-    };
-    setOutfits((prev) => [...prev, outfit]);
-    toast({
-      title: "Outfit Created",
-      description: "Successfully created a new outfit",
-    });
+  const updateOutfit = async (id: string, updates: Partial<Outfit>) => {
+    try {
+      const response = await fetch(`${API_URL}/outfits/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updates)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update outfit');
+      }
+      
+      const updatedOutfit = await response.json();
+      const parsedOutfit: Outfit = {
+        ...updatedOutfit,
+        createdAt: new Date(updatedOutfit.createdAt),
+        lastWorn: updatedOutfit.lastWorn ? new Date(updatedOutfit.lastWorn) : undefined
+      };
+      
+      setOutfits((prev) =>
+        prev.map((outfit) =>
+          outfit.id === id ? parsedOutfit : outfit
+        )
+      );
+      toast.success("Outfit updated successfully");
+    } catch (error) {
+      console.error("Failed to update outfit:", error);
+      toast.error("Failed to update outfit");
+    }
   };
 
-  const updateOutfit = (id: string, updates: Partial<Outfit>) => {
-    setOutfits((prev) =>
-      prev.map((outfit) =>
-        outfit.id === id ? { ...outfit, ...updates } : outfit
-      )
-    );
-    toast({
-      title: "Outfit Updated",
-      description: "Successfully updated your outfit",
-    });
-  };
-
-  const removeOutfit = (id: string) => {
-    setOutfits((prev) => prev.filter((outfit) => outfit.id !== id));
-    toast({
-      title: "Outfit Removed",
-      description: "Successfully removed the outfit",
-    });
+  const removeOutfit = async (id: string) => {
+    try {
+      const response = await fetch(`${API_URL}/outfits/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete outfit');
+      }
+      
+      setOutfits((prev) => prev.filter((outfit) => outfit.id !== id));
+      toast.success("Outfit removed successfully");
+    } catch (error) {
+      console.error("Failed to remove outfit:", error);
+      toast.error("Failed to remove outfit");
+    }
   };
 
   const getItemById = (id: string) => {
