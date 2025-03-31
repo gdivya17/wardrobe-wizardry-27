@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ClothingCategory, ClothingColor, ClothingSeason, ClothingOccasion, ClothingItem } from "@/types";
 import { useCloset } from "@/context/ClosetContext";
 import { useNavigate } from "react-router-dom";
-import { Upload } from "lucide-react";
+import ImageProcessor from "./ImageProcessor";
 
 interface ItemFormProps {
   existingItem?: ClothingItem;
@@ -69,12 +68,6 @@ const ItemForm: React.FC<ItemFormProps> = ({ existingItem }) => {
         : [...prev, occasion]
     );
   };
-  
-  const handleImageUpload = () => {
-    // In a real app, we'd handle file uploads
-    // For now, we're using placeholder images
-    alert("Image upload would be implemented with Supabase Storage in a real app");
-  };
 
   const categories: ClothingCategory[] = ["tops", "bottoms", "outerwear", "dresses", "shoes", "accessories"];
   const colors: ClothingColor[] = ["black", "white", "red", "blue", "green", "yellow", "purple", "pink", "brown", "gray", "multicolor", "other"];
@@ -85,20 +78,11 @@ const ItemForm: React.FC<ItemFormProps> = ({ existingItem }) => {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
         <div className="flex items-center justify-center mb-4">
-          <div 
-            className="relative w-40 h-40 bg-gray-100 rounded-lg overflow-hidden"
-            onClick={handleImageUpload}
-          >
-            <img 
-              src={imageUrl} 
-              alt="Clothing preview" 
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white hover:bg-black/50 transition-colors cursor-pointer">
-              <Upload size={24} />
-              <span className="ml-2">Upload Image</span>
-            </div>
-          </div>
+          <ImageProcessor 
+            imageUrl={imageUrl} 
+            onImageChange={setImageUrl} 
+            className="max-w-full"
+          />
         </div>
       </div>
 
