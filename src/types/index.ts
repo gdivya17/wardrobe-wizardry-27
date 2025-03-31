@@ -26,6 +26,7 @@ export type ClothingColor =
   | "pink" 
   | "brown" 
   | "gray" 
+  | "silver"
   | "multicolor" 
   | "other";
 
