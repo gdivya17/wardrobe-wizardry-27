@@ -42,6 +42,10 @@ const AuthPage: React.FC = () => {
             <span>Having trouble connecting?</span>
           </p>
           <p>Make sure the Python backend is running at: {import.meta.env.VITE_API_URL || "http://localhost:8000"}</p>
+          <p className="mt-1">If port 8000 is already in use, try running the backend on a different port:</p>
+          <pre className="mt-1 text-xs bg-gray-100 p-2 rounded">uvicorn app.main:app --reload --port 8001</pre>
+          <p className="mt-1">Then set the environment variable before starting the frontend:</p>
+          <pre className="text-xs bg-gray-100 p-2 rounded">export VITE_API_URL=http://localhost:8001</pre>
         </div>
       </div>
     </div>
