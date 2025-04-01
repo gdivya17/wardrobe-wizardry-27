@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
+import { AlertCircle } from "lucide-react";
 
 interface RegisterFormProps {
   onToggleForm: () => void;
@@ -15,12 +16,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const { register } = useAuth();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMsg("");
 
     try {
       await register(email, password, name);
@@ -29,6 +32,12 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
         description: "Welcome to Wardrobe Wizardry!",
       });
     } catch (error) {
+      console.error("Registration error:", error);
+      setErrorMsg(
+        error instanceof Error 
+          ? error.message 
+          : "Unable to connect to the server. Please check if the backend is running."
+      );
       toast({
         title: "Error",
         description: "Failed to create account. Please try again.",
@@ -45,6 +54,19 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
         <h1 className="text-3xl font-bold">Create an Account</h1>
         <p className="text-muted-foreground">Enter your details to get started</p>
       </div>
+      
+      {errorMsg && (
+        <div className="bg-destructive/10 text-destructive p-3 rounded-md flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Registration failed</p>
+            <p className="text-sm">{errorMsg}</p>
+            <p className="text-sm mt-1">
+              Please ensure the backend server is running at the correct URL.
+            </p>
+          </div>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">

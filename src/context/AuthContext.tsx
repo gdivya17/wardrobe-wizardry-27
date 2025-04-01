@@ -21,8 +21,11 @@ export const useAuth = () => {
   return context;
 };
 
-// API base URL - change this to your Python backend URL
-const API_URL = "http://localhost:8000";
+// API base URL - use environment variable if available, but fallback to localhost for development
+// In production, you should set this to your deployed backend URL
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+console.log("Using API URL:", API_URL);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -54,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error("Auth check failed:", error);
+        toast.error("Could not connect to authentication server. Please try again later.");
       } finally {
         setIsLoading(false);
       }
@@ -65,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
+      console.log("Attempting login to:", `${API_URL}/auth/login`);
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
@@ -102,7 +107,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success("Successfully logged in");
     } catch (error) {
       console.error("Login failed:", error);
-      toast.error("Login failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      
+      // More detailed error message for connection issues
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        toast.error("Could not connect to the authentication server. Please check your internet connection or try again later.");
+      } else {
+        toast.error("Login failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      }
+      
       throw error;
     } finally {
       setIsLoading(false);
@@ -112,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
+      console.log("Attempting registration to:", `${API_URL}/auth/register`);
       const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: {
@@ -140,7 +153,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success("Account created successfully");
     } catch (error) {
       console.error("Registration failed:", error);
-      toast.error("Registration failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      
+      // More descriptive error message for connection issues
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        toast.error("Could not connect to the registration server. Please check your internet connection or try again later.");
+      } else {
+        toast.error("Registration failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      }
+      
       throw error;
     } finally {
       setIsLoading(false);
