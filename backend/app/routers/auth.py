@@ -1,5 +1,4 @@
-
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -34,7 +33,7 @@ async def register(user_data: UserCreate):
         "email": user_data.email,
         "name": user_data.name,
         "password": hashed_password,
-        "createdAt": str(datetime.datetime.now())
+        "createdAt": str(datetime.now())
     }
     
     user = database.create_user(user_id, user_dict)
