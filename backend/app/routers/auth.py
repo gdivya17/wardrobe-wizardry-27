@@ -1,3 +1,4 @@
+
 from datetime import datetime, timedelta
 from typing import Dict
 
@@ -17,37 +18,45 @@ router = APIRouter(
 
 @router.post("/register", response_model=User)
 async def register(user_data: UserCreate):
-    # Check if user already exists
-    db_user = database.get_user_by_email(user_data.email)
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+    try:
+        # Check if user already exists
+        db_user = database.get_user_by_email(user_data.email)
+        if db_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Create new user
+        user_id = str(uuid.uuid4())
+        hashed_password = get_password_hash(user_data.password)
+        
+        user_dict = {
+            "email": user_data.email,
+            "name": user_data.name,
+            "password": hashed_password,
+            "createdAt": str(datetime.now())
+        }
+        
+        user = database.create_user(user_id, user_dict)
+        
+        # Create access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user_id}, expires_delta=access_token_expires
         )
-    
-    # Create new user
-    user_id = str(uuid.uuid4())
-    hashed_password = get_password_hash(user_data.password)
-    
-    user_dict = {
-        "email": user_data.email,
-        "name": user_data.name,
-        "password": hashed_password,
-        "createdAt": str(datetime.now())
-    }
-    
-    user = database.create_user(user_id, user_dict)
-    
-    # Create access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user_id}, expires_delta=access_token_expires
-    )
-    
-    # Remove password from return
-    user.pop("password", None)
-    
-    return {**user, "access_token": access_token}
+        
+        # Remove password from return
+        user.pop("password", None)
+        
+        # Make sure to include the id in the response
+        return {**user, "id": user_id, "access_token": access_token}
+    except Exception as e:
+        print(f"Registration error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
 
 @router.post("/login", response_model=Token)
 async def login(form_data: UserLogin):
